@@ -11,17 +11,6 @@
 # })
 # edited_df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
 
-# # テーブル名の入力
-# table_ref_input = st.text_input("🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）", "")
-
-# # 期間指定
-# use_date_filter = st.checkbox("📅 期間指定を使用する")
-# if use_date_filter:
-#     term_column = st.text_input("フィルタ対象の日付カラム名", value="impression_date")
-#     start_date = st.date_input("開始日", value=pd.to_datetime("2025-03-01"))
-#     end_date = st.date_input("終了日", value=pd.to_datetime("2025-03-31"))
-# else:
-#     term_column = None
 
 
 import streamlit as st
@@ -68,6 +57,20 @@ edited_df = st.data_editor(st.session_state["column_data"], num_rows="dynamic", 
 # 以降のクエリ生成処理などに使うため保持
 st.session_state["column_data"] = edited_df
 
+
+
+
+# テーブル名の入力
+table_ref_input = st.text_input("🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）", "")
+
+# 期間指定
+use_date_filter = st.checkbox("📅 期間指定を使用する")
+if use_date_filter:
+    term_column = st.text_input("フィルタ対象の日付カラム名", value="impression_date")
+    start_date = st.date_input("開始日", value=pd.to_datetime("2025-03-01"))
+    end_date = st.date_input("終了日", value=pd.to_datetime("2025-03-31"))
+else:
+    term_column = None
 
 
 
