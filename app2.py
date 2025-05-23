@@ -26,8 +26,7 @@
 
 import streamlit as st
 import pandas as pd
-import ioimport streamlit as st
-import pandas as pd
+import io
 
 st.title("BigQuery 検品用クエリ生成ツール")
 
