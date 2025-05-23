@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>BigQuery 検品用クエリ生成ツール</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; }
+    input, select, button { margin: 0.5em 0; padding: 0.5em; width: 100%; }
+    textarea { width: 100%; height: 300px; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>BigQuery 検品用クエリ生成ツール</h1>
+
+ <!-- 省略部分は上記と同じ。以下の部分を挿入／置換 -->
+<p>📋 Excelで作成したカラム名とデータ型（2列）をコピーして下のエリアに貼り付けてください：</p>
+<textarea id="paste-area" placeholder="例：&#10;user_id<TAB>STRING&#10;created_at<TAB>TIMESTAMP" rows="5"></textarea>
+<button onclick="parsePastedData()">🧾 表に反映</button>
+
+<table id="columns-table">
+  <thead>
+    <tr><th>カラム名</th><th>データ型</th><th>操作</th></tr>
+  </thead>
+  <tbody>
+    <!-- 初期行はなし、貼り付けから生成 -->
+  </tbody>
+</table>
+<button onclick="addRow()">行を追加</button>
+
+
+
+
+
+  <p>🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）</p>
+  <input type="text" id="table-name">
+
+  <p><label><input type="checkbox" id="date-filter-toggle"> 📅 期間指定を使用する</label></p>
+  <div id="date-filters" style="display:none;">
+    <input type="text" id="term-column" placeholder="日付カラム名 (例: impression_date)">
+    <input type="date" id="start-date">
+    <input type="date" id="end-date">
+  </div>
+
+  <button onclick="generateQuery()">🛠️ クエリ生成</button>
+
+  <textarea id="query-output" placeholder="ここにクエリが表示されます..."></textarea>
+  <button onclick="downloadQuery()">📄 クエリをダウンロード</button>
+
+  <script>
+    function addRow() {
+      const table = document.querySelector("#columns-table tbody");
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td><input type="text" class="col-name"></td>
+        <td>
+          <select class="data-type">
+            <option value="STRING">STRING</option>
+            <option value="TIMESTAMP">TIMESTAMP</option>
+            <option value="INTEGER">INTEGER</option>
+            <option value="FLOAT">FLOAT</option>
+            <option value="DATE">DATE</option>
+            <option value="BOOLEAN">BOOLEAN</option>
+          </select>
+        </td>
+        <td><button onclick="removeRow(this)">削除</button></td>
+      `;
+    }
+
+    function removeRow(btn) {
+      btn.closest("tr").remove();
+    }
+
+    document.getElementById("date-filter-toggle").addEventListener("change", function () {
+      document.getElementById("date-filters").style.display = this.checked ? "block" : "none";
+    });
+
+    function generateQuery() {
+      const tableName = document.getElementById("table-name").value.trim();
+      if (!tableName) {
+        alert("テーブル名を入力してください。");
+        return;
+      }
+
+      const useDateFilter = document.getElementById("date-filter-toggle").checked;
+      const termColumn = document.getElementById("term-column").value;
+      const startDate = document.getElementById("start-date").value;
+      const endDate = document.getElementById("end-date").value;
+      const rows = document.querySelectorAll("#columns-table tbody tr");
+
+      let queries = [];
+      rows.forEach(row => {
+        const col = row.querySelector(".col-name").value.trim();
+        const dtype = row.querySelector(".data-type").value;
+
+        if (!col || !dtype) return;
+
+        let dateFilter = "";
+        if (useDateFilter && termColumn && startDate && endDate) {
+          dateFilter = `WHERE DATE(${termColumn}) BETWEEN '${startDate}' AND '${endDate}'`;
+        }
+
+        const baseQuery = `
+SELECT
+'${col}' AS column_name,
+NULL AS column_ronti,
+'${dtype}_ARRAY' AS data_type,
+NULL AS data_ronti,
+NULL AS data_length,
+NULL AS null_able,
+NULL AS selection_columns,
+NULL AS consideration_columns,
+COUNT(*) AS total_count,
+COUNTIF(${col} IS NULL) AS null_count,
+${dtype === "STRING" ? "COUNTIF(TRIM(" + col + ") = '') AS empty_string_count," : "NULL AS empty_string_count,"}
+COUNT(DISTINCT ${col}) AS unique_count,
+${dtype === "STRING"
+  ? "SAFE_DIVIDE(COUNTIF(" + col + " IS NULL OR TRIM(" + col + ") = ''), COUNT(*))"
+  : "SAFE_DIVIDE(COUNTIF(" + col + " IS NULL), COUNT(*))"
+} * 100 AS missing_rate_percent,
+SAFE_CAST(MIN(${col}) AS STRING) AS min_value,
+SAFE_CAST(MAX(${col}) AS STRING) AS max_value
+FROM \`${tableName}\` ${dateFilter}
+`.trim();
+        queries.push(baseQuery);
+      });
+
+      const output = queries.join("\nUNION ALL\n");
+      document.getElementById("query-output").value = output;
+    }
+
+    function downloadQuery() {
+      const content = document.getElementById("query-output").value;
+      const blob = new Blob([content], { type: "text/sql" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "bq_inspection_query.sql";
+      link.click();
+    }
+
+
+function parsePastedData() {
+  const rawText = document.getElementById("paste-area").value.trim();
+  const rows = rawText.split("\n");
+  const tbody = document.querySelector("#columns-table tbody");
+  tbody.innerHTML = ""; // 初期化
+
+  rows.forEach(row => {
+    const [col, type] = row.split("\t");
+    if (!col || !type) return;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="text" class="col-name" value="${col.trim()}"></td>
+      <td>
+        <select class="data-type">
+          ${["STRING", "TIMESTAMP", "INTEGER", "FLOAT", "DATE", "BOOLEAN"].map(opt =>
+            `<option value="${opt}" ${type.trim().toUpperCase() === opt ? "selected" : ""}>${opt}</option>`
+          ).join("")}
+        </select>
+      </td>
+      <td><button onclick="removeRow(this)">削除</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+
+
+  </script>
+</body>
+</html>
