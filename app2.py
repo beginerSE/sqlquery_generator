@@ -26,14 +26,22 @@
 
 import streamlit as st
 import pandas as pd
-import io
+import ioimport streamlit as st
+import pandas as pd
 
 st.title("BigQuery 検品用クエリ生成ツール")
 
-st.write("📋 Excelで作成したカラム名とデータ型（2列）をコピーして以下に貼り付けてください（TSV形式）")
+st.write("📋 Excelで作成したカラム名とデータ型（2列）をコピーして下に貼り付け、「表に反映」ボタンを押してください")
 
-# TSV貼り付け用テキストエリア
-tsv_input = st.text_area("TSV入力欄（例: user_id[TAB]STRING）", height=150)
+# セッション状態に表データを保持
+if "column_data" not in st.session_state:
+    st.session_state["column_data"] = pd.DataFrame({
+        "col_name": ["", ""],
+        "data_type": ["STRING", "TIMESTAMP"]
+    })
+
+# 貼り付け用エリア
+tsv_input = st.text_area("TSV入力欄（例: user_id\\tSTRING）", height=150, key="tsv_input")
 
 # TSVパース関数
 def parse_tsv(tsv_text):
@@ -41,31 +49,27 @@ def parse_tsv(tsv_text):
     data = []
     for line in lines:
         if '\t' in line:
-            col_name, data_type = line.split('\t', 1)
-            data.append({"col_name": col_name.strip(), "data_type": data_type.strip().upper()})
+            parts = line.split('\t')
+            if len(parts) == 2:
+                col_name, data_type = parts
+                data.append({"col_name": col_name.strip(), "data_type": data_type.strip().upper()})
     return pd.DataFrame(data)
 
-# TSVがあればそれを使用、なければ初期値
-if tsv_input:
-    default_data = parse_tsv(tsv_input)
-else:
-    default_data = pd.DataFrame({
-        "col_name": ["", ""],
-        "data_type": ["STRING", "TIMESTAMP"]
-    })
+# 表に反映ボタン
+if st.button("🧾 表に反映"):
+    new_df = parse_tsv(tsv_input)
+    if not new_df.empty:
+        st.session_state["column_data"] = new_df
+    else:
+        st.warning("貼り付け内容が無効です。カラム名とデータ型をタブ区切りで入力してください。")
 
-edited_df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
+# 編集可能な表を表示
+edited_df = st.data_editor(st.session_state["column_data"], num_rows="dynamic", use_container_width=True)
 
-# テーブル名などその他処理はそのまま続けられます
-table_ref_input = st.text_input("🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）", "")
-use_date_filter = st.checkbox("📅 期間指定を使用する")
+# 以降のクエリ生成処理などに使うため保持
+st.session_state["column_data"] = edited_df
 
-if use_date_filter:
-    term_column = st.text_input("フィルタ対象の日付カラム名", value="impression_date")
-    start_date = st.date_input("開始日", value=pd.to_datetime("2025-03-01"))
-    end_date = st.date_input("終了日", value=pd.to_datetime("2025-03-31"))
-else:
-    term_column = None
+
 
 
 
