@@ -12,6 +12,10 @@
 # edited_df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
 
 
+# 自由記述欄
+# AWS版 切り替え機能
+
+
 
 import streamlit as st
 import pandas as pd
