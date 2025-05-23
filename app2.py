@@ -1,27 +1,75 @@
+# import streamlit as st
+# import pandas as pd
+
+# st.title("BigQuery 検品用クエリ生成ツール")
+
+# # 疑似エクセル入力エリア（初期値2行）
+# st.write("📋 カラム名とデータ型を手入力またはコピペしてください（必要に応じて行を追加）")
+# default_data = pd.DataFrame({
+#     "col_name": ["", ""],
+#     "data_type": ["STRING", "TIMESTAMP"]
+# })
+# edited_df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
+
+# # テーブル名の入力
+# table_ref_input = st.text_input("🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）", "")
+
+# # 期間指定
+# use_date_filter = st.checkbox("📅 期間指定を使用する")
+# if use_date_filter:
+#     term_column = st.text_input("フィルタ対象の日付カラム名", value="impression_date")
+#     start_date = st.date_input("開始日", value=pd.to_datetime("2025-03-01"))
+#     end_date = st.date_input("終了日", value=pd.to_datetime("2025-03-31"))
+# else:
+#     term_column = None
+
+
 import streamlit as st
 import pandas as pd
+import io
 
 st.title("BigQuery 検品用クエリ生成ツール")
 
-# 疑似エクセル入力エリア（初期値2行）
-st.write("📋 カラム名とデータ型を手入力またはコピペしてください（必要に応じて行を追加）")
-default_data = pd.DataFrame({
-    "col_name": ["", ""],
-    "data_type": ["STRING", "TIMESTAMP"]
-})
+st.write("📋 Excelで作成したカラム名とデータ型（2列）をコピーして以下に貼り付けてください（TSV形式）")
+
+# TSV貼り付け用テキストエリア
+tsv_input = st.text_area("TSV入力欄（例: user_id[TAB]STRING）", height=150)
+
+# TSVパース関数
+def parse_tsv(tsv_text):
+    lines = tsv_text.strip().splitlines()
+    data = []
+    for line in lines:
+        if '\t' in line:
+            col_name, data_type = line.split('\t', 1)
+            data.append({"col_name": col_name.strip(), "data_type": data_type.strip().upper()})
+    return pd.DataFrame(data)
+
+# TSVがあればそれを使用、なければ初期値
+if tsv_input:
+    default_data = parse_tsv(tsv_input)
+else:
+    default_data = pd.DataFrame({
+        "col_name": ["", ""],
+        "data_type": ["STRING", "TIMESTAMP"]
+    })
+
 edited_df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
 
-# テーブル名の入力
+# テーブル名などその他処理はそのまま続けられます
 table_ref_input = st.text_input("🔗 BigQueryのテーブル名を入力してください（例: project.dataset.table）", "")
-
-# 期間指定
 use_date_filter = st.checkbox("📅 期間指定を使用する")
+
 if use_date_filter:
     term_column = st.text_input("フィルタ対象の日付カラム名", value="impression_date")
     start_date = st.date_input("開始日", value=pd.to_datetime("2025-03-01"))
     end_date = st.date_input("終了日", value=pd.to_datetime("2025-03-31"))
 else:
     term_column = None
+
+
+
+
 
 # 実行ボタン
 if st.button("🛠️ クエリ生成") and table_ref_input:
